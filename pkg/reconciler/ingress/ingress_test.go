@@ -55,6 +55,13 @@ var (
 	privateSvcIP = "5.6.7.8"
 	publicSvc    = network.GetServiceHostname(publicName, testNamespace)
 	privateSvc   = network.GetServiceHostname(privateName, testNamespace)
+
+	gatewayRef = gatewayapi.ParentReference{
+		Group:     (*gatewayapi.Group)(pointer.String("gateway.networking.k8s.io")),
+		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Namespace: (*gatewayapi.Namespace)(pointer.String("istio-system")),
+		Name:      gatewayapi.ObjectName("istio-gateway"),
+	}
 )
 
 var (
@@ -388,6 +395,47 @@ func TestReconcileTLS(t *testing.T) {
 			Eventf(corev1.EventTypeWarning, "GatewayMissing", `Unable to update Gateway istio-system/istio-gateway`),
 			Eventf(corev1.EventTypeWarning, "InternalError", `Gateway istio-system/istio-gateway does not exist: gateway.gateway.networking.k8s.io "istio-gateway" not found`),
 		},
+	}, {
+		Name: "TLS ingress with httpOption redirected",
+		Key:  "ns/name",
+		Objects: append([]runtime.Object{
+			ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)),
+			secret(secretName, nsName),
+			gw(defaultListener),
+		}, servicesAndEndpoints...),
+		WantCreates: []runtime.Object{
+			httpRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)), withSectionName("kni-")),
+			httpRedirectRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)), withSectionName("http")),
+			rp(secret(secretName, nsName)),
+		},
+		WantUpdates: []clientgotesting.UpdateActionImpl{{
+			Object: gw(defaultListener, tlsListener("secure.example.com", nsName, secretName)),
+		}},
+		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
+			Object: ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName), func(i *v1alpha1.Ingress) {
+				// These are the things we expect to change in status.
+				i.Status.InitializeConditions()
+				i.Status.MarkLoadBalancerReady(
+					[]v1alpha1.LoadBalancerIngressStatus{{
+						DomainInternal: publicSvc,
+					}},
+					[]v1alpha1.LoadBalancerIngressStatus{{
+						DomainInternal: privateSvc,
+					}})
+			}),
+		}},
+		WantPatches: []clientgotesting.PatchActionImpl{{
+			ActionImpl: clientgotesting.ActionImpl{
+				Namespace: "ns",
+			},
+			Name:  "name",
+			Patch: []byte(`{"metadata":{"finalizers":["ingresses.networking.internal.knative.dev"],"resourceVersion":""}}`),
+		}},
+		WantEvents: []string{
+			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
+			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com-redirect\""),
+		},
 	}}
 
 	table.Test(t, GatewayFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, tr *TableRow) controller.Reconciler {
@@ -493,14 +541,31 @@ func httpRoute(t *testing.T, i *v1alpha1.Ingress, opts ...HTTPRouteOption) runti
 	t.Helper()
 	ingress.InsertProbe(i)
 	ctx := (&testConfigStore{config: defaultConfig}).ToContext(context.Background())
-	httpRoute, _ := resources.MakeHTTPRoute(ctx, i, &i.Spec.Rules[0])
+	httpRoute, _ := resources.MakeHTTPRoute(ctx, i, &i.Spec.Rules[0], gatewayRef)
 	for _, opt := range opts {
 		opt(httpRoute)
 	}
 	return httpRoute
 }
 
+func httpRedirectRoute(t *testing.T, i *v1alpha1.Ingress, opts ...HTTPRouteOption) runtime.Object {
+	t.Helper()
+	ingress.InsertProbe(i)
+
+	httpRedirectRoute, _ := resources.MakeRedirectHTTPRoute(i, &i.Spec.Rules[0], gatewayRef)
+	for _, opt := range opts {
+		opt(httpRedirectRoute)
+	}
+	return httpRedirectRoute
+}
+
 type HTTPRouteOption func(h *gatewayapi.HTTPRoute)
+
+func withSectionName(sectionName string) HTTPRouteOption {
+	return func(h *gatewayapi.HTTPRoute) {
+		h.Spec.CommonRouteSpec.ParentRefs[0].SectionName = (*gatewayapi.SectionName)(pointer.String(sectionName))
+	}
+}
 
 func withGatewayAPIclass(i *v1alpha1.Ingress) {
 	withAnnotation(map[string]string{
@@ -565,7 +630,7 @@ func defaultListener(g *gatewayapi.Gateway) {
 func tlsListener(hostname, nsName, secretName string) GatewayOption {
 	return func(g *gatewayapi.Gateway) {
 		g.Spec.Listeners = append(g.Spec.Listeners, gatewayapi.Listener{
-			Name:     gatewayapi.SectionName("kni-"),
+			Name:     "kni-",
 			Hostname: (*gatewayapi.Hostname)(&hostname),
 			Port:     443,
 			Protocol: "HTTPS",
@@ -657,12 +722,14 @@ var (
 		Gateway: &config.Gateway{
 			Gateways: map[v1alpha1.IngressVisibility]config.GatewayConfig{
 				v1alpha1.IngressVisibilityExternalIP: {
-					Service: &types.NamespacedName{Namespace: "istio-system", Name: "istio-gateway"},
-					Gateway: &types.NamespacedName{Namespace: "istio-system", Name: "istio-gateway"},
+					Service:          &types.NamespacedName{Namespace: "istio-system", Name: "istio-gateway"},
+					Gateway:          &types.NamespacedName{Namespace: "istio-system", Name: "istio-gateway"},
+					HTTPListenerName: "http",
 				},
 				v1alpha1.IngressVisibilityClusterLocal: {
-					Service: &types.NamespacedName{Namespace: "istio-system", Name: "knative-local-gateway"},
-					Gateway: &types.NamespacedName{Namespace: "istio-system", Name: "knative-local-gateway"},
+					Service:          &types.NamespacedName{Namespace: "istio-system", Name: "knative-local-gateway"},
+					Gateway:          &types.NamespacedName{Namespace: "istio-system", Name: "knative-local-gateway"},
+					HTTPListenerName: "http",
 				},
 			},
 		},
