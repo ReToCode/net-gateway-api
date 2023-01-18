@@ -25,7 +25,10 @@ data:
       class: contour
       gateway: contour-external/knative-gateway
       service: contour-external/envoy
+      httpListenerName: default
     ClusterLocal:
       class: contour
       gateway: contour-internal/knative-local-gateway
       service: contour-internal/envoy
+      httpListenerName: default
+

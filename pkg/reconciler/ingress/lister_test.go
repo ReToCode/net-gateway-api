@@ -313,6 +313,10 @@ func withBasicSpec(i *v1alpha1.Ingress) {
 	})
 }
 
+func withHTTPOptionRedirected(i *v1alpha1.Ingress) {
+	i.Spec.HTTPOption = v1alpha1.HTTPOptionRedirected
+}
+
 func withInternalSpec(i *v1alpha1.Ingress) {
 	i.Spec.Rules = append(i.Spec.Rules, v1alpha1.IngressRule{
 		Hosts:      []string{"foo.svc", "foo.svc.cluster.local"},

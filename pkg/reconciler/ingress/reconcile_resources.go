@@ -36,19 +36,74 @@ import (
 
 const listenerPrefix = "kni-"
 
-// reconcileHTTPRoute reconciles HTTPRoute.
-func (c *Reconciler) reconcileHTTPRoute(
+// reconcileWorkloadRoute reconciles the HTTPRoute for the workload traffic
+func (c *Reconciler) reconcileWorkloadRoute(
 	ctx context.Context, ing *netv1alpha1.Ingress,
 	rule *netv1alpha1.IngressRule,
 ) (*gatewayapi.HTTPRoute, error) {
+
+	gatewayConfig := config.FromContext(ctx).Gateway.Gateways[rule.Visibility]
+	gatewayRef := gatewayapi.ParentReference{
+		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
+		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Namespace: (*gatewayapi.Namespace)(&gatewayConfig.Gateway.Namespace),
+		Name:      gatewayapi.ObjectName(gatewayConfig.Gateway.Name),
+	}
+
+	// If http > https redirect is enabled, this route must only be bound to the TLS listener on the gateway.
+	// For now, we only generate the TLS Listener on the external traffic gateway
+	// because there's no way to provide TLS for internal listeners.
+	if ing.Spec.HTTPOption == netv1alpha1.HTTPOptionRedirected && rule.Visibility == netv1alpha1.IngressVisibilityExternalIP {
+		sectionName := gatewayapi.SectionName(listenerPrefix + ing.GetUID())
+		gatewayRef.SectionName = &sectionName
+	}
+
+	desired, err := resources.MakeHTTPRoute(ing, rule, gatewayRef)
+	if err != nil {
+		return nil, err
+	}
+	return c.reconcileHTTPRoute(ctx, ing, desired)
+}
+
+// reconcileRedirectHTTPRoute reconciles the HTTPRoute for the http->https redirect
+func (c *Reconciler) reconcileRedirectHTTPRoute(
+	ctx context.Context, ing *netv1alpha1.Ingress,
+	rule *netv1alpha1.IngressRule,
+) (*gatewayapi.HTTPRoute, error) {
+
+	if ing.Spec.TLS == nil || len(ing.Spec.TLS) == 0 {
+		return nil, fmt.Errorf("no TLS configuration provided in `spec.tls`. Failed to create HTTPRoute for HTTPS redirection")
+	}
+
+	gatewayConfig := config.FromContext(ctx).Gateway.Gateways[rule.Visibility]
+	gatewayRef := gatewayapi.ParentReference{
+		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
+		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Namespace: (*gatewayapi.Namespace)(&gatewayConfig.Gateway.Namespace),
+		Name:      gatewayapi.ObjectName(gatewayConfig.Gateway.Name),
+
+		// Redirect routes must only be bound on the http listener of the gateway
+		SectionName: (*gatewayapi.SectionName)(&gatewayConfig.HTTPListenerName),
+	}
+
+	desired, err := resources.MakeRedirectHTTPRoute(ing, rule, gatewayRef)
+	if err != nil {
+		return nil, err
+	}
+	return c.reconcileHTTPRoute(ctx, ing, desired)
+}
+
+// reconcileHTTPRoute reconciles the desired HTTPRoute.
+func (c *Reconciler) reconcileHTTPRoute(ctx context.Context,
+	ing *netv1alpha1.Ingress,
+	desired *gatewayapi.HTTPRoute,
+) (*gatewayapi.HTTPRoute, error) {
+
 	recorder := controller.GetEventRecorder(ctx)
 
-	httproute, err := c.httprouteLister.HTTPRoutes(ing.Namespace).Get(resources.LongestHost(rule.Hosts))
+	httproute, err := c.httprouteLister.HTTPRoutes(ing.Namespace).Get(desired.Name)
 	if apierrs.IsNotFound(err) {
-		desired, err := resources.MakeHTTPRoute(ctx, ing, rule)
-		if err != nil {
-			return nil, err
-		}
+
 		httproute, err = c.gwapiclient.GatewayV1beta1().HTTPRoutes(desired.Namespace).Create(ctx, desired, metav1.CreateOptions{})
 		if err != nil {
 			recorder.Eventf(ing, corev1.EventTypeWarning, "CreationFailed", "Failed to create HTTPRoute: %v", err)
@@ -60,11 +115,6 @@ func (c *Reconciler) reconcileHTTPRoute(
 	} else if err != nil {
 		return nil, err
 	} else {
-		desired, err := resources.MakeHTTPRoute(ctx, ing, rule)
-		if err != nil {
-			return nil, err
-		}
-
 		if !equality.Semantic.DeepEqual(httproute.Spec, desired.Spec) ||
 			!equality.Semantic.DeepEqual(httproute.Annotations, desired.Annotations) ||
 			!equality.Semantic.DeepEqual(httproute.Labels, desired.Labels) {
