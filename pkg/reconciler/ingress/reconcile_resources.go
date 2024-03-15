@@ -25,6 +25,7 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -42,7 +43,6 @@ func (c *Reconciler) reconcileWorkloadRoute(
 	ctx context.Context, ing *netv1alpha1.Ingress,
 	rule *netv1alpha1.IngressRule,
 ) (*gatewayapi.HTTPRoute, error) {
-
 	gatewayConfig := config.FromContext(ctx).Gateway.Gateways[rule.Visibility]
 	gatewayRef := gatewayapi.ParentReference{
 		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
@@ -102,26 +102,25 @@ func (c *Reconciler) reconcileHTTPRoute(ctx context.Context,
 
 	recorder := controller.GetEventRecorder(ctx)
 
-	httproute, err := c.httprouteLister.HTTPRoutes(ing.Namespace).Get(desired.Name)
+	httpRoute, err := c.httprouteLister.HTTPRoutes(ing.Namespace).Get(desired.Name)
 	if apierrs.IsNotFound(err) {
-
-		httproute, err = c.gwapiclient.GatewayV1beta1().HTTPRoutes(desired.Namespace).Create(ctx, desired, metav1.CreateOptions{})
+		httpRoute, err = c.gwapiclient.GatewayV1beta1().HTTPRoutes(desired.Namespace).Create(ctx, desired, metav1.CreateOptions{})
 		if err != nil {
 			recorder.Eventf(ing, corev1.EventTypeWarning, "CreationFailed", "Failed to create HTTPRoute: %v", err)
 			return nil, fmt.Errorf("failed to create HTTPRoute: %w", err)
 		}
 
-		recorder.Eventf(ing, corev1.EventTypeNormal, "Created", "Created HTTPRoute %q", httproute.GetName())
-		return httproute, nil
+		recorder.Eventf(ing, corev1.EventTypeNormal, "Created", "Created HTTPRoute %q", httpRoute.GetName())
+		return httpRoute, nil
 	} else if err != nil {
 		return nil, err
 	} else {
-		if !equality.Semantic.DeepEqual(httproute.Spec, desired.Spec) ||
-			!equality.Semantic.DeepEqual(httproute.Annotations, desired.Annotations) ||
-			!equality.Semantic.DeepEqual(httproute.Labels, desired.Labels) {
+		if !equality.Semantic.DeepEqual(httpRoute.Spec, desired.Spec) ||
+			!equality.Semantic.DeepEqual(httpRoute.Annotations, desired.Annotations) ||
+			!equality.Semantic.DeepEqual(httpRoute.Labels, desired.Labels) {
 
 			// Don't modify the informers copy.
-			origin := httproute.DeepCopy()
+			origin := httpRoute.DeepCopy()
 			origin.Spec = desired.Spec
 			origin.Annotations = desired.Annotations
 			origin.Labels = desired.Labels
@@ -136,7 +135,7 @@ func (c *Reconciler) reconcileHTTPRoute(ctx context.Context,
 		}
 	}
 
-	return httproute, err
+	return httpRoute, err
 }
 
 func (c *Reconciler) reconcileTLS(

@@ -103,7 +103,7 @@ func (c *Reconciler) reconcileIngress(ctx context.Context, ing *v1alpha1.Ingress
 		}
 
 		// For now, we only generate the redirected HTTPRoute for external visibility,
-		// because currently we do not support HTTPs on cluster-local domains.
+		// because currently we do not (yet) support HTTPs on cluster-local domains.
 		var redirectHTTPRoute *gatewayapi.HTTPRoute
 		if ing.Spec.HTTPOption == v1alpha1.HTTPOptionRedirected && rule.Visibility == v1alpha1.IngressVisibilityExternalIP {
 			redirectHTTPRoute, err = c.reconcileRedirectHTTPRoute(ctx, ing, &rule)

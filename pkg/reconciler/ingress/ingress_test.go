@@ -399,20 +399,20 @@ func TestReconcileTLS(t *testing.T) {
 		Name: "TLS ingress with httpOption redirected",
 		Key:  "ns/name",
 		Objects: append([]runtime.Object{
-			ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)),
+			ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS()),
 			secret(secretName, nsName),
 			gw(defaultListener),
 		}, servicesAndEndpoints...),
 		WantCreates: []runtime.Object{
-			httpRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)), withSectionName("kni-")),
-			httpRedirectRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName)), withSectionName("http")),
+			httpRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS()), withSectionName("kni-")),
+			httpRedirectRoute(t, ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS()), withSectionName("http")),
 			rp(secret(secretName, nsName)),
 		},
 		WantUpdates: []clientgotesting.UpdateActionImpl{{
-			Object: gw(defaultListener, tlsListener("secure.example.com", nsName, secretName)),
+			Object: gw(defaultListener, tlsListener("example.com", nsName, secretName)),
 		}},
 		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
-			Object: ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(secretName), func(i *v1alpha1.Ingress) {
+			Object: ing(withBasicSpec, withGatewayAPIClass, withHTTPOptionRedirected, withTLS(), func(i *v1alpha1.Ingress) {
 				// These are the things we expect to change in status.
 				i.Status.InitializeConditions()
 				i.Status.MarkLoadBalancerReady(
@@ -540,8 +540,7 @@ func makeItReady(i *v1alpha1.Ingress) {
 func httpRoute(t *testing.T, i *v1alpha1.Ingress, opts ...HTTPRouteOption) runtime.Object {
 	t.Helper()
 	ingress.InsertProbe(i)
-	ctx := (&testConfigStore{config: defaultConfig}).ToContext(context.Background())
-	httpRoute, _ := resources.MakeHTTPRoute(ctx, i, &i.Spec.Rules[0], gatewayRef)
+	httpRoute, _ := resources.MakeHTTPRoute(i, &i.Spec.Rules[0], gatewayRef)
 	for _, opt := range opts {
 		opt(httpRoute)
 	}
@@ -708,8 +707,8 @@ func rp(to *corev1.Secret) *gatewayapi.ReferenceGrant {
 				Namespace: gatewayapi.Namespace(testNamespace),
 			}},
 			To: []gatewayapi.ReferenceGrantTo{{
-				Group: gatewayapi.Group(""),
-				Kind:  gatewayapi.Kind("Secret"),
+				Group: "",
+				Kind:  "Secret",
 				Name:  (*gatewayapi.ObjectName)(&to.Name),
 			}},
 		},

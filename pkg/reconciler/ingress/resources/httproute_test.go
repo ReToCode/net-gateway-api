@@ -23,21 +23,18 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
-	"knative.dev/net-gateway-api/pkg/reconciler/ingress/config"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"knative.dev/networking/pkg/apis/networking"
 	"knative.dev/networking/pkg/apis/networking/v1alpha1"
 	"knative.dev/pkg/kmeta"
-	"knative.dev/pkg/reconciler"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
 
 const (
-	testNamespace    = "test-ns"
-	testIngressName  = "test-ingress"
-	testGatewayClass = "test-class"
+	testNamespace   = "test-ns"
+	testIngressName = "test-ingress"
 )
 
 var (
@@ -57,9 +54,9 @@ var (
 	gatewayRef = gatewayapi.ParentReference{
 		Group:       (*gatewayapi.Group)(pointer.String("gateway.networking.k8s.io")),
 		Kind:        (*gatewayapi.Kind)(pointer.String("Gateway")),
-		Namespace:   ptr[gatewayapi.Namespace]("test-ns"),
+		Namespace:   ptr.To[gatewayapi.Namespace]("test-ns"),
 		Name:        gatewayapi.ObjectName("foo"),
-		SectionName: ptr[gatewayapi.SectionName]("http"),
+		SectionName: ptr.To[gatewayapi.SectionName]("http"),
 	}
 )
 
@@ -218,7 +215,6 @@ func TestMakeHTTPRoute(t *testing.T) {
 										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 										Value: ptr.To("/"),
 									},
-									Headers: HTTPHeaderMatchList{},
 								},
 							},
 						}},
@@ -298,7 +294,6 @@ func TestMakeHTTPRoute(t *testing.T) {
 									Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 									Value: ptr.To("/"),
 								},
-								Headers: HTTPHeaderMatchList{},
 							}},
 						}},
 						CommonRouteSpec: gatewayapi.CommonRouteSpec{
@@ -476,12 +471,7 @@ func TestMakeHTTPRoute(t *testing.T) {
 						}}},
 					},
 					CommonRouteSpec: gatewayapi.CommonRouteSpec{
-						ParentRefs: []gatewayapi.ParentReference{{
-							Group:     (*gatewayapi.Group)(ptr.To("gateway.networking.k8s.io")),
-							Kind:      (*gatewayapi.Kind)(ptr.To("Gateway")),
-							Namespace: ptr.To[gatewayapi.Namespace]("test-ns"),
-							Name:      gatewayapi.ObjectName("foo"),
-						}},
+						ParentRefs: []gatewayapi.ParentReference{gatewayRef},
 					},
 				},
 			}},
@@ -566,20 +556,19 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 						Hostnames: []gatewayapi.Hostname{externalHost},
 						Rules: []gatewayapi.HTTPRouteRule{{
 							Filters: []gatewayapi.HTTPRouteFilter{{
-								Type: gatewayapi.HTTPRouteFilterRequestRedirect,
+								Type: gatewayapiv1.HTTPRouteFilterRequestRedirect,
 								RequestRedirect: &gatewayapi.HTTPRequestRedirectFilter{
-									Scheme:     ptr("https"),
-									Port:       portNumPtr(443),
-									StatusCode: ptr(http.StatusMovedPermanently),
+									Scheme:     ptr.To("https"),
+									Port:       ptr.To(gatewayapi.PortNumber(443)),
+									StatusCode: ptr.To(http.StatusMovedPermanently),
 								},
 							}},
 							Matches: []gatewayapi.HTTPRouteMatch{
 								{
 									Path: &gatewayapi.HTTPPathMatch{
-										Type:  ptr(gatewayapi.PathMatchPathPrefix),
+										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 										Value: pointer.String("/"),
 									},
-									Headers: HTTPHeaderMatchList{},
 								},
 							},
 						}},
@@ -601,19 +590,18 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 						Hostnames: []gatewayapi.Hostname{localHostShortest, localHostShort, localHostFull},
 						Rules: []gatewayapi.HTTPRouteRule{{
 							Filters: []gatewayapi.HTTPRouteFilter{{
-								Type: gatewayapi.HTTPRouteFilterRequestRedirect,
+								Type: gatewayapiv1.HTTPRouteFilterRequestRedirect,
 								RequestRedirect: &gatewayapi.HTTPRequestRedirectFilter{
-									Scheme:     ptr("https"),
-									Port:       portNumPtr(443),
-									StatusCode: ptr(http.StatusMovedPermanently),
+									Scheme:     ptr.To("https"),
+									Port:       ptr.To(gatewayapi.PortNumber(443)),
+									StatusCode: ptr.To(http.StatusMovedPermanently),
 								},
 							}},
 							Matches: []gatewayapi.HTTPRouteMatch{{
 								Path: &gatewayapi.HTTPPathMatch{
-									Type:  ptr(gatewayapi.PathMatchPathPrefix),
+									Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 									Value: pointer.String("/"),
 								},
-								Headers: HTTPHeaderMatchList{},
 							}},
 						}},
 						CommonRouteSpec: gatewayapi.CommonRouteSpec{
@@ -682,43 +670,43 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 					Rules: []gatewayapi.HTTPRouteRule{
 						{
 							Filters: []gatewayapi.HTTPRouteFilter{{
-								Type: gatewayapi.HTTPRouteFilterRequestRedirect,
+								Type: gatewayapiv1.HTTPRouteFilterRequestRedirect,
 								RequestRedirect: &gatewayapi.HTTPRequestRedirectFilter{
-									Scheme:     ptr("https"),
-									Port:       portNumPtr(443),
-									StatusCode: ptr(http.StatusMovedPermanently),
+									Scheme:     ptr.To("https"),
+									Port:       ptr.To(gatewayapi.PortNumber(443)),
+									StatusCode: ptr.To(http.StatusMovedPermanently),
 								},
 							}},
 							Matches: []gatewayapi.HTTPRouteMatch{
 								{
 									Path: &gatewayapi.HTTPPathMatch{
-										Type:  ptr(gatewayapi.PathMatchPathPrefix),
+										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 										Value: pointer.String("/"),
 									},
 									Headers: []gatewayapi.HTTPHeaderMatch{{
-										Type:  ptr(gatewayapi.HeaderMatchExact),
-										Name:  gatewayapi.HTTPHeaderName("tag"),
+										Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
+										Name:  gatewayapiv1.HTTPHeaderName("tag"),
 										Value: "goo",
 									}},
 								}},
 						}, {
 							Filters: []gatewayapi.HTTPRouteFilter{{
-								Type: gatewayapi.HTTPRouteFilterRequestRedirect,
+								Type: gatewayapiv1.HTTPRouteFilterRequestRedirect,
 								RequestRedirect: &gatewayapi.HTTPRequestRedirectFilter{
-									Scheme:     ptr("https"),
-									Port:       portNumPtr(443),
-									StatusCode: ptr(http.StatusMovedPermanently),
+									Scheme:     ptr.To("https"),
+									Port:       ptr.To(gatewayapi.PortNumber(443)),
+									StatusCode: ptr.To(http.StatusMovedPermanently),
 								},
 							}},
 							Matches: []gatewayapi.HTTPRouteMatch{
 								{
 									Path: &gatewayapi.HTTPPathMatch{
-										Type:  ptr(gatewayapi.PathMatchPathPrefix),
+										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 										Value: pointer.String("/doo"),
 									},
 									Headers: []gatewayapi.HTTPHeaderMatch{{
-										Type:  ptr(gatewayapi.HeaderMatchExact),
-										Name:  gatewayapi.HTTPHeaderName("tag"),
+										Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
+										Name:  gatewayapiv1.HTTPHeaderName("tag"),
 										Value: "doo",
 									}},
 								}},

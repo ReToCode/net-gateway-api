@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"sort"
 
+	"k8s.io/utils/pointer"
 	"knative.dev/pkg/kmap"
 
 	corev1 "k8s.io/api/core/v1"
@@ -74,16 +75,6 @@ func makeHTTPRouteSpec(
 	}
 
 	rules := makeHTTPRouteRule(rule)
-
-	gatewayConfig := config.FromContext(ctx).Gateway
-	namespacedNameGateway := gatewayConfig.Gateways[rule.Visibility].Gateway
-
-	gatewayRef := gatewayapi.ParentReference{
-		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
-		Kind:      (*gatewayapi.Kind)(ptr.To("Gateway")),
-		Namespace: ptr.To(gatewayapi.Namespace(namespacedNameGateway.Namespace)),
-		Name:      gatewayapi.ObjectName(namespacedNameGateway.Name),
-	}
 
 	return gatewayapi.HTTPRouteSpec{
 		Hostnames: hostnames,
@@ -163,14 +154,6 @@ func makeHTTPRouteRule(rule *netv1alpha1.IngressRule) []gatewayapi.HTTPRouteRule
 			backendRefs = append(backendRefs, backendRef)
 		}
 
-		pathPrefix := "/"
-		if path.Path != "" {
-			pathPrefix = path.Path
-		}
-		pathMatch := gatewayapi.HTTPPathMatch{
-			Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-			Value: ptr.To(pathPrefix),
-		}
 		matches := matchesFromRulePath(path)
 		rule := gatewayapi.HTTPRouteRule{
 			BackendRefs: backendRefs,
@@ -236,11 +219,11 @@ func makeRedirectHTTPRouteRule(rule *netv1alpha1.IngressRule) []gatewayapi.HTTPR
 	for _, path := range rule.HTTP.Paths {
 		preFilters := []gatewayapi.HTTPRouteFilter{
 			{
-				Type: gatewayapi.HTTPRouteFilterRequestRedirect,
+				Type: gatewayapiv1.HTTPRouteFilterRequestRedirect,
 				RequestRedirect: &gatewayapi.HTTPRequestRedirectFilter{
-					Scheme:     ptr("https"),
-					Port:       portNumPtr(443),
-					StatusCode: ptr(http.StatusMovedPermanently),
+					Scheme:     ptr.To("https"),
+					Port:       ptr.To(gatewayapi.PortNumber(443)),
+					StatusCode: ptr.To(http.StatusMovedPermanently),
 				},
 			}}
 
@@ -260,24 +243,15 @@ func matchesFromRulePath(path netv1alpha1.HTTPIngressPath) []gatewayapi.HTTPRout
 		pathPrefix = path.Path
 	}
 	pathMatch := gatewayapi.HTTPPathMatch{
-		Type:  ptr(gatewayapi.PathMatchPathPrefix),
+		Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
 		Value: pointer.String(pathPrefix),
 	}
 
-		var headerMatchList []gatewayapi.HTTPHeaderMatch
-		for k, v := range path.Headers {
-			headerMatch := gatewayapi.HTTPHeaderMatch{
-				Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
-				Name:  gatewayapiv1.HTTPHeaderName(k),
-				Value: v.Exact,
-			}
-			headerMatchList = append(headerMatchList, headerMatch)
-		}
-	headerMatchList := []gatewayapi.HTTPHeaderMatch{}
+	var headerMatchList []gatewayapi.HTTPHeaderMatch
 	for k, v := range path.Headers {
 		headerMatch := gatewayapi.HTTPHeaderMatch{
-			Type:  ptr(gatewayapi.HeaderMatchExact),
-			Name:  gatewayapi.HTTPHeaderName(k),
+			Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
+			Name:  gatewayapiv1.HTTPHeaderName(k),
 			Value: v.Exact,
 		}
 		headerMatchList = append(headerMatchList, headerMatch)
