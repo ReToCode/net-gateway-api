@@ -25,7 +25,6 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -46,7 +45,7 @@ func (c *Reconciler) reconcileWorkloadRoute(
 	gatewayConfig := config.FromContext(ctx).Gateway.Gateways[rule.Visibility]
 	gatewayRef := gatewayapi.ParentReference{
 		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
-		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Kind:      (*gatewayapi.Kind)(ptr.To("Gateway")),
 		Namespace: (*gatewayapi.Namespace)(&gatewayConfig.Gateway.Namespace),
 		Name:      gatewayapi.ObjectName(gatewayConfig.Gateway.Name),
 	}
@@ -79,7 +78,7 @@ func (c *Reconciler) reconcileRedirectHTTPRoute(
 	gatewayConfig := config.FromContext(ctx).Gateway.Gateways[rule.Visibility]
 	gatewayRef := gatewayapi.ParentReference{
 		Group:     (*gatewayapi.Group)(&gatewayapi.GroupVersion.Group),
-		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Kind:      (*gatewayapi.Kind)(ptr.To("Gateway")),
 		Namespace: (*gatewayapi.Namespace)(&gatewayConfig.Gateway.Namespace),
 		Name:      gatewayapi.ObjectName(gatewayConfig.Gateway.Name),
 
@@ -114,25 +113,25 @@ func (c *Reconciler) reconcileHTTPRoute(ctx context.Context,
 		return httpRoute, nil
 	} else if err != nil {
 		return nil, err
-	} else {
-		if !equality.Semantic.DeepEqual(httpRoute.Spec, desired.Spec) ||
-			!equality.Semantic.DeepEqual(httpRoute.Annotations, desired.Annotations) ||
-			!equality.Semantic.DeepEqual(httpRoute.Labels, desired.Labels) {
+	}
 
-			// Don't modify the informers copy.
-			origin := httpRoute.DeepCopy()
-			origin.Spec = desired.Spec
-			origin.Annotations = desired.Annotations
-			origin.Labels = desired.Labels
+	if !equality.Semantic.DeepEqual(httpRoute.Spec, desired.Spec) ||
+		!equality.Semantic.DeepEqual(httpRoute.Annotations, desired.Annotations) ||
+		!equality.Semantic.DeepEqual(httpRoute.Labels, desired.Labels) {
 
-			updated, err := c.gwapiclient.GatewayV1beta1().HTTPRoutes(origin.Namespace).Update(
-				ctx, origin, metav1.UpdateOptions{})
-			if err != nil {
-				recorder.Eventf(ing, corev1.EventTypeWarning, "UpdateFailed", "Failed to update HTTPRoute: %v", err)
-				return nil, fmt.Errorf("failed to update HTTPRoute: %w", err)
-			}
-			return updated, nil
+		// Don't modify the informers copy.
+		origin := httpRoute.DeepCopy()
+		origin.Spec = desired.Spec
+		origin.Annotations = desired.Annotations
+		origin.Labels = desired.Labels
+
+		updated, err := c.gwapiclient.GatewayV1beta1().HTTPRoutes(origin.Namespace).Update(
+			ctx, origin, metav1.UpdateOptions{})
+		if err != nil {
+			recorder.Eventf(ing, corev1.EventTypeWarning, "UpdateFailed", "Failed to update HTTPRoute: %v", err)
+			return nil, fmt.Errorf("failed to update HTTPRoute: %w", err)
 		}
+		return updated, nil
 	}
 
 	return httpRoute, err

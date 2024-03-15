@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"sort"
 
-	"k8s.io/utils/pointer"
 	"knative.dev/pkg/kmap"
 
 	corev1 "k8s.io/api/core/v1"
@@ -244,7 +243,7 @@ func matchesFromRulePath(path netv1alpha1.HTTPIngressPath) []gatewayapi.HTTPRout
 	}
 	pathMatch := gatewayapi.HTTPPathMatch{
 		Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-		Value: pointer.String(pathPrefix),
+		Value: ptr.To(pathPrefix),
 	}
 
 	var headerMatchList []gatewayapi.HTTPHeaderMatch

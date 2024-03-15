@@ -33,7 +33,7 @@ import (
 	"knative.dev/networking/pkg/status"
 	"knative.dev/pkg/kmeta"
 
-	. "knative.dev/net-gateway-api/pkg/reconciler/testing"
+	ingress "knative.dev/net-gateway-api/pkg/reconciler/testing"
 )
 
 var (
@@ -142,7 +142,7 @@ func TestListProbeTargets(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tl := NewListers(test.objects)
+			tl := ingress.NewListers(test.objects)
 
 			l := &gatewayPodTargetLister{
 				endpointsLister: tl.GetEndpointsLister(),

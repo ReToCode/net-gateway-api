@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgotesting "k8s.io/client-go/testing"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	fakegwapiclientset "knative.dev/net-gateway-api/pkg/client/injection/client/fake"
 	"knative.dev/net-gateway-api/pkg/reconciler/ingress/config"
@@ -46,8 +46,8 @@ import (
 
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
-	. "knative.dev/net-gateway-api/pkg/reconciler/testing"
-	. "knative.dev/pkg/reconciler/testing"
+	gwtesting "knative.dev/net-gateway-api/pkg/reconciler/testing"
+	ktesting "knative.dev/pkg/reconciler/testing"
 )
 
 var (
@@ -57,9 +57,9 @@ var (
 	privateSvc   = network.GetServiceHostname(privateName, testNamespace)
 
 	gatewayRef = gatewayapi.ParentReference{
-		Group:     (*gatewayapi.Group)(pointer.String("gateway.networking.k8s.io")),
-		Kind:      (*gatewayapi.Kind)(pointer.String("Gateway")),
-		Namespace: (*gatewayapi.Namespace)(pointer.String("istio-system")),
+		Group:     (*gatewayapi.Group)(ptr.To("gateway.networking.k8s.io")),
+		Kind:      (*gatewayapi.Kind)(ptr.To("Gateway")),
+		Namespace: (*gatewayapi.Namespace)(ptr.To("istio-system")),
 		Name:      gatewayapi.ObjectName("istio-gateway"),
 	}
 )
@@ -137,7 +137,7 @@ var (
 
 // TODO: Add more tests - e.g. invalid ingress, delete ingress, etc.
 func TestReconcile(t *testing.T) {
-	table := TableTest{{
+	table := ktesting.TableTest{{
 		Name: "bad workqueue key",
 		Key:  "too/many/parts",
 	}, {
@@ -187,8 +187,8 @@ func TestReconcile(t *testing.T) {
 			Patch: []byte(`{"metadata":{"finalizers":["ingresses.networking.internal.knative.dev"],"resourceVersion":""}}`),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
 		},
 	}, {
 		Name: "reconcile ready ingress",
@@ -200,7 +200,7 @@ func TestReconcile(t *testing.T) {
 		// no extra update
 	}}
 
-	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher) controller.Reconciler {
+	table.Test(t, gwtesting.MakeFactory(func(ctx context.Context, listers *gwtesting.Listers, _ configmap.Watcher) controller.Reconciler {
 		r := &Reconciler{
 			gwapiclient: fakegwapiclientset.Get(ctx),
 			// Listers index properties about resources
@@ -225,7 +225,7 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestReconcileProberNotReady(t *testing.T) {
-	table := TableTest{{
+	table := ktesting.TableTest{{
 		Name: "first reconcile basic ingress wth prober",
 		Key:  "ns/name",
 		Objects: append([]runtime.Object{
@@ -246,12 +246,12 @@ func TestReconcileProberNotReady(t *testing.T) {
 			Patch: []byte(`{"metadata":{"finalizers":["ingresses.networking.internal.knative.dev"],"resourceVersion":""}}`),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
 		},
 	}}
 
-	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher) controller.Reconciler {
+	table.Test(t, gwtesting.MakeFactory(func(ctx context.Context, listers *gwtesting.Listers, _ configmap.Watcher) controller.Reconciler {
 		r := &Reconciler{
 			gwapiclient: fakegwapiclientset.Get(ctx),
 			// Listers index properties about resources
@@ -277,7 +277,7 @@ func TestReconcileTLS(t *testing.T) {
 	secretName := "name-WE-STICK-A-LONG-UID-HERE"
 	nsName := "ns"
 	deleteTime := time.Now().Add(-10 * time.Second)
-	table := TableTest{{
+	table := ktesting.TableTest{{
 		Name: "Happy TLS",
 		Key:  "ns/name",
 		Objects: []runtime.Object{
@@ -312,8 +312,8 @@ func TestReconcileTLS(t *testing.T) {
 			}),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", `Created HTTPRoute "example.com"`),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", `Created HTTPRoute "example.com"`),
 		},
 	}, {
 		Name: "Already Configured",
@@ -390,10 +390,10 @@ func TestReconcileTLS(t *testing.T) {
 			}),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", `Created HTTPRoute "example.com"`),
-			Eventf(corev1.EventTypeWarning, "GatewayMissing", `Unable to update Gateway istio-system/istio-gateway`),
-			Eventf(corev1.EventTypeWarning, "InternalError", `Gateway istio-system/istio-gateway does not exist: gateway.gateway.networking.k8s.io "istio-gateway" not found`),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", `Created HTTPRoute "example.com"`),
+			ktesting.Eventf(corev1.EventTypeWarning, "GatewayMissing", `Unable to update Gateway istio-system/istio-gateway`),
+			ktesting.Eventf(corev1.EventTypeWarning, "InternalError", `Gateway istio-system/istio-gateway does not exist: gateway.gateway.networking.k8s.io "istio-gateway" not found`),
 		},
 	}, {
 		Name: "TLS ingress with httpOption redirected",
@@ -432,13 +432,13 @@ func TestReconcileTLS(t *testing.T) {
 			Patch: []byte(`{"metadata":{"finalizers":["ingresses.networking.internal.knative.dev"],"resourceVersion":""}}`),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
-			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com-redirect\""),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com-redirect\""),
 		},
 	}}
 
-	table.Test(t, GatewayFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher, tr *TableRow) controller.Reconciler {
+	table.Test(t, GatewayFactory(func(ctx context.Context, listers *gwtesting.Listers, _ configmap.Watcher, tr *ktesting.TableRow) controller.Reconciler {
 		r := &Reconciler{
 			gwapiclient:          fakegwapiclientset.Get(ctx),
 			httprouteLister:      listers.GetHTTPRouteLister(),
@@ -475,7 +475,7 @@ func TestReconcileTLS(t *testing.T) {
 func TestReconcileProbeError(t *testing.T) {
 	theError := errors.New("this is the error")
 
-	table := TableTest{{
+	table := ktesting.TableTest{{
 		Name:    "first reconcile basic ingress",
 		Key:     "ns/name",
 		WantErr: true,
@@ -497,13 +497,13 @@ func TestReconcileProbeError(t *testing.T) {
 			Patch: []byte(`{"metadata":{"finalizers":["ingresses.networking.internal.knative.dev"],"resourceVersion":""}}`),
 		}},
 		WantEvents: []string{
-			Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
-			Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
-			Eventf(corev1.EventTypeWarning, "InternalError", fmt.Sprintf("failed to probe Ingress: %v", theError)),
+			ktesting.Eventf(corev1.EventTypeNormal, "FinalizerUpdate", `Updated "name" finalizers`),
+			ktesting.Eventf(corev1.EventTypeNormal, "Created", "Created HTTPRoute \"example.com\""),
+			ktesting.Eventf(corev1.EventTypeWarning, "InternalError", fmt.Sprintf("failed to probe Ingress: %v", theError)),
 		},
 	}}
 
-	table.Test(t, MakeFactory(func(ctx context.Context, listers *Listers, cmw configmap.Watcher) controller.Reconciler {
+	table.Test(t, gwtesting.MakeFactory(func(ctx context.Context, listers *gwtesting.Listers, _ configmap.Watcher) controller.Reconciler {
 		r := &Reconciler{
 			gwapiclient: fakegwapiclientset.Get(ctx),
 			// Listers index properties about resources
@@ -562,7 +562,7 @@ type HTTPRouteOption func(h *gatewayapi.HTTPRoute)
 
 func withSectionName(sectionName string) HTTPRouteOption {
 	return func(h *gatewayapi.HTTPRoute) {
-		h.Spec.CommonRouteSpec.ParentRefs[0].SectionName = (*gatewayapi.SectionName)(pointer.String(sectionName))
+		h.Spec.CommonRouteSpec.ParentRefs[0].SectionName = (*gatewayapi.SectionName)(ptr.To(sectionName))
 	}
 }
 
@@ -589,14 +589,14 @@ func (t *testConfigStore) ToContext(ctx context.Context) context.Context {
 }
 
 // We need to inject the row's `Objects` to work-around improper pluralization in UnsafeGuessKindToResource
-func GatewayFactory(ctor func(context.Context, *Listers, configmap.Watcher, *TableRow) controller.Reconciler) Factory {
-	return func(t *testing.T, r *TableRow) (
-		controller.Reconciler, ActionRecorderList, EventList,
+func GatewayFactory(ctor func(context.Context, *gwtesting.Listers, configmap.Watcher, *ktesting.TableRow) controller.Reconciler) ktesting.Factory {
+	return func(t *testing.T, r *ktesting.TableRow) (
+		controller.Reconciler, ktesting.ActionRecorderList, ktesting.EventList,
 	) {
-		shim := func(c context.Context, l *Listers, cw configmap.Watcher) controller.Reconciler {
+		shim := func(c context.Context, l *gwtesting.Listers, cw configmap.Watcher) controller.Reconciler {
 			return ctor(c, l, cw, r)
 		}
-		return MakeFactory(shim)(t, r)
+		return gwtesting.MakeFactory(shim)(t, r)
 	}
 }
 
@@ -634,10 +634,10 @@ func tlsListener(hostname, nsName, secretName string) GatewayOption {
 			Port:     443,
 			Protocol: "HTTPS",
 			TLS: &gatewayapi.GatewayTLSConfig{
-				Mode: (*gatewayapi.TLSModeType)(pointer.String("Terminate")),
+				Mode: (*gatewayapi.TLSModeType)(ptr.To("Terminate")),
 				CertificateRefs: []gatewayapi.SecretObjectReference{{
-					Group:     (*gatewayapi.Group)(pointer.String("")),
-					Kind:      (*gatewayapi.Kind)(pointer.String("Secret")),
+					Group:     (*gatewayapi.Group)(ptr.To("")),
+					Kind:      (*gatewayapi.Kind)(ptr.To("Secret")),
 					Name:      gatewayapi.ObjectName(secretName),
 					Namespace: (*gatewayapi.Namespace)(&nsName),
 				}},
@@ -645,7 +645,7 @@ func tlsListener(hostname, nsName, secretName string) GatewayOption {
 			},
 			AllowedRoutes: &gatewayapi.AllowedRoutes{
 				Namespaces: &gatewayapi.RouteNamespaces{
-					From: (*gatewayapi.FromNamespaces)(pointer.String("Selector")),
+					From: (*gatewayapi.FromNamespaces)(ptr.To("Selector")),
 					Selector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{
 							"kubernetes.io/metadata.name": nsName,

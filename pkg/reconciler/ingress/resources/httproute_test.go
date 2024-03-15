@@ -23,7 +23,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 	"k8s.io/utils/ptr"
 	"knative.dev/networking/pkg/apis/networking"
 	"knative.dev/networking/pkg/apis/networking/v1alpha1"
@@ -52,8 +51,8 @@ var (
 	testHosts = []string{"hello-example.default.example.com"}
 
 	gatewayRef = gatewayapi.ParentReference{
-		Group:       (*gatewayapi.Group)(pointer.String("gateway.networking.k8s.io")),
-		Kind:        (*gatewayapi.Kind)(pointer.String("Gateway")),
+		Group:       (*gatewayapi.Group)(ptr.To("gateway.networking.k8s.io")),
+		Kind:        (*gatewayapi.Kind)(ptr.To("Gateway")),
 		Namespace:   ptr.To[gatewayapi.Namespace]("test-ns"),
 		Name:        gatewayapi.ObjectName("foo"),
 		SectionName: ptr.To[gatewayapi.SectionName]("http"),
@@ -567,7 +566,7 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 								{
 									Path: &gatewayapi.HTTPPathMatch{
 										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-										Value: pointer.String("/"),
+										Value: ptr.To("/"),
 									},
 								},
 							},
@@ -600,7 +599,7 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 							Matches: []gatewayapi.HTTPRouteMatch{{
 								Path: &gatewayapi.HTTPPathMatch{
 									Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-									Value: pointer.String("/"),
+									Value: ptr.To("/"),
 								},
 							}},
 						}},
@@ -681,7 +680,7 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 								{
 									Path: &gatewayapi.HTTPPathMatch{
 										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-										Value: pointer.String("/"),
+										Value: ptr.To("/"),
 									},
 									Headers: []gatewayapi.HTTPHeaderMatch{{
 										Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
@@ -702,7 +701,7 @@ func TestMakeRedirectHTTPRoute(t *testing.T) {
 								{
 									Path: &gatewayapi.HTTPPathMatch{
 										Type:  ptr.To(gatewayapiv1.PathMatchPathPrefix),
-										Value: pointer.String("/doo"),
+										Value: ptr.To("/doo"),
 									},
 									Headers: []gatewayapi.HTTPHeaderMatch{{
 										Type:  ptr.To(gatewayapiv1.HeaderMatchExact),
